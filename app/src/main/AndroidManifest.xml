@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Declared for accurate capability checks; neither permission is requested automatically. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!-- Declared for capability checks; neither permission is requested automatically. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
@@ -9,6 +16,16 @@
         android:label="iOS Transformation"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity
+            android:name=".launcher.HomeLauncherActivity"
+            android:exported="true"
+            android:label="iOS Transformation Home">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".MainActivity"
             android:exported="true">
