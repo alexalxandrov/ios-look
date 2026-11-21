@@ -21,8 +21,9 @@ data class OperationRecord(
 )
 
 /**
- * Persistence boundary. The production implementation will use Room.
- * State transitions must be written before and after each mutating step.
+ * Durable state-transition boundary. The current implementation stores a
+ * bounded journal in app-private SharedPreferences; the interface allows a
+ * future migration to Room without changing the coordinator.
  */
 interface OperationJournal {
     suspend fun record(record: OperationRecord)
