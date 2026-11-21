@@ -1,5 +1,6 @@
 package dev.ioslook.transformation
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,10 +37,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ioslook.transformation.diagnostics.DeviceDiagnostics
 import dev.ioslook.transformation.diagnostics.DeviceReport
+import dev.ioslook.transformation.diagnostics.DiagnosticItem
+import dev.ioslook.transformation.diagnostics.DiagnosticState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,20 +63,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme(colorScheme = GlassColors) {
-                TransformationHome()
+                TransformationHome(context = this)
             }
         }
     }
 }
 
-@androidx.compose.runtime.Composable
-private fun TransformationHome() {
+@Composable
+private fun TransformationHome(context: Context) {
     val scope = rememberCoroutineScope()
     var report by remember { mutableStateOf<DeviceReport?>(null) }
     var checking by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        report = DeviceDiagnostics.readBasic()
+    LaunchedEffect(context) {
+        report = withContext(Dispatchers.IO) { DeviceDiagnostics.readBasic(context) }
     }
 
     Surface(
@@ -110,8 +115,7 @@ private fun TransformationHome() {
             )
 
             GlassCard {
-                Text("DEVICE", color = Color(0xFF9EADC7), fontSize = 10.sp, letterSpacing = 1.8.sp)
-                Spacer(Modifier.height(8.dp))
+                SectionLabel("DEVICE BASELINE")
                 Text(
                     report?.deviceName ?: "Detecting device…",
                     color = Color.White,
@@ -124,6 +128,19 @@ private fun TransformationHome() {
                     fontSize = 13.sp
                 )
                 Text(
+                    "Security patch: ${report?.securityPatch ?: "—"}",
+                    color = Color(0xFFB5C0D3),
+                    fontSize = 12.sp
+                )
+                Text(
+                    report?.fingerprint ?: "Build fingerprint unavailable",
+                    color = Color(0xFF8795AD),
+                    fontSize = 10.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
                     report?.rootSummary ?: "Root status: not checked",
                     color = Color(0xFFCAD5E8),
                     fontSize = 13.sp
@@ -131,30 +148,38 @@ private fun TransformationHome() {
             }
 
             GlassCard {
-                Text("TRANSFORMATION PROFILE", color = Color(0xFF9EADC7), fontSize = 10.sp, letterSpacing = 1.8.sp)
-                Spacer(Modifier.height(8.dp))
-                Text("iOS 26 · Dark · Liquid Glass", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                SectionLabel("TRANSFORMATION PROFILE")
                 Text(
-                    "A visual target, not an iOS port. Components will be enabled only after compatibility checks.",
+                    "iOS 26 · Dark · Liquid Glass",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "An independent Android implementation. Components will be enabled only after compatibility checks.",
                     color = Color(0xFFB5C0D3),
                     fontSize = 13.sp
                 )
             }
 
             GlassCard {
-                Text("CAPABILITY CHECK", color = Color(0xFF9EADC7), fontSize = 10.sp, letterSpacing = 1.8.sp)
-                Spacer(Modifier.height(8.dp))
-                CapabilityRow("Launcher / icon pack", "Planned · no root")
-                CapabilityRow("Theme and typography", "Needs device validation")
-                CapabilityRow("Notifications / media", "Permission-based")
-                CapabilityRow("Quick Settings / SystemUI", "Restricted · experimental")
-                CapabilityRow("Root adapter", report?.rootSummary ?: "Not checked")
+                SectionLabel("LIVE CAPABILITY CHECKS")
+                val capabilities = report?.capabilities.orEmpty()
+                if (capabilities.isEmpty()) {
+                    Text("Collecting device and permission state…", color = Color(0xFFAAB8D0), fontSize = 13.sp)
+                } else {
+                    capabilities.forEach { item ->
+                        CapabilityRow(item)
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {
                         checking = true
                         scope.launch {
-                            report = withContext(Dispatchers.IO) { DeviceDiagnostics.runFullCheck() }
+                            report = withContext(Dispatchers.IO) {
+                                DeviceDiagnostics.runFullCheck(context)
+                            }
                             checking = false
                         }
                     },
@@ -165,12 +190,17 @@ private fun TransformationHome() {
                         contentColor = Color(0xFF101827)
                     )
                 ) {
-                    Text(if (checking) "Checking…" else "Run device diagnostics")
+                    Text(if (checking) "Checking…" else "Run full diagnostics")
                 }
+                Text(
+                    "Full diagnostics also makes one read-only su probe. Your root manager may ask for authorization. Nothing is modified.",
+                    color = Color(0xFF8F9BB0),
+                    fontSize = 11.sp
+                )
             }
 
             Text(
-                "No system files are changed by this build. Backup, operation journal and rollback are foundational requirements before any mutating feature is enabled.",
+                "The transaction engine now requires a verified backup before applying any registered change. No customization operation is enabled in this build yet.",
                 color = Color(0xFF8F9BB0),
                 fontSize = 12.sp
             )
@@ -178,8 +208,13 @@ private fun TransformationHome() {
     }
 }
 
-@androidx.compose.runtime.Composable
-private fun GlassCard(content: @androidx.compose.runtime.Composable ColumnScope.() -> Unit) {
+@Composable
+private fun SectionLabel(value: String) {
+    Text(value, color = Color(0xFF9EADC7), fontSize = 10.sp, letterSpacing = 1.8.sp)
+}
+
+@Composable
+private fun GlassCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -188,20 +223,39 @@ private fun GlassCard(content: @androidx.compose.runtime.Composable ColumnScope.
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
             content = content
         )
     }
 }
 
-@androidx.compose.runtime.Composable
-private fun CapabilityRow(label: String, value: String) {
-    Row(
+@Composable
+private fun CapabilityRow(item: DiagnosticItem) {
+    val statusLabel = when (item.state) {
+        DiagnosticState.READY -> "READY"
+        DiagnosticState.NEEDS_USER_ACTION -> "ACTION"
+        DiagnosticState.NOT_TARGET -> "MISMATCH"
+        DiagnosticState.UNTESTED -> "UNTESTED"
+    }
+    val statusColor = when (item.state) {
+        DiagnosticState.READY -> Color(0xFF9BD7BB)
+        DiagnosticState.NEEDS_USER_ACTION -> Color(0xFFE4C58A)
+        DiagnosticState.NOT_TARGET -> Color(0xFFE69A9A)
+        DiagnosticState.UNTESTED -> Color(0xFF9DAAC1)
+    }
+
+    Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Text(label, color = Color(0xFFE7ECF6), fontSize = 13.sp)
-        Text(value, color = Color(0xFFAAB8D0), fontSize = 11.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(item.title, color = Color(0xFFE7ECF6), fontSize = 13.sp)
+            Text(statusLabel, color = statusColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(item.detail, color = Color(0xFFAAB8D0), fontSize = 11.sp)
     }
 }
