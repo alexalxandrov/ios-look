@@ -74,11 +74,11 @@ object DeviceDiagnostics {
             DiagnosticItem(
                 id = "home_role",
                 title = "Default launcher role",
-                state = DiagnosticState.UNTESTED,
+                state = if (isHomeRoleHeld) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
                 detail = if (isHomeRoleHeld) {
-                    "The app holds the HOME role, but launcher functionality is not implemented yet."
+                    "iOS-inspired home launcher is available and currently selected."
                 } else {
-                    "The app is not the default HOME app. Launcher integration is not implemented yet."
+                    "The launcher is implemented. Select it as the default HOME app to use it."
                 }
             ),
             DiagnosticItem(
