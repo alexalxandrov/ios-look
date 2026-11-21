@@ -1,6 +1,8 @@
 package dev.ioslook.transformation
 
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import android.os.Bundle
 import android.app.role.RoleManager
 import androidx.activity.ComponentActivity
@@ -78,6 +80,13 @@ private fun TransformationHome(context: Context) {
     var report by remember { mutableStateOf<DeviceReport?>(null) }
     var checking by remember { mutableStateOf(false) }
     val homeRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        scope.launch {
+            report = withContext(Dispatchers.IO) { DeviceDiagnostics.readBasic(context) }
+        }
+    }
+    val notificationSettingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         scope.launch {
@@ -196,6 +205,26 @@ private fun TransformationHome(context: Context) {
                 }
             }
 
+            val notificationAccessReady = report?.capabilities
+                ?.firstOrNull { it.id == "notification_listener" }
+                ?.state == DiagnosticState.READY
+            if (!notificationAccessReady) {
+                Button(
+                    onClick = {
+                        notificationSettingsLauncher.launch(
+                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF34445D),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("Open notification access settings")
+                }
+            }
+
             GlassCard {
                 SectionLabel("LIVE CAPABILITY CHECKS")
                 val capabilities = report?.capabilities.orEmpty()
@@ -231,6 +260,15 @@ private fun TransformationHome(context: Context) {
                     color = Color(0xFF8F9BB0),
                     fontSize = 11.sp
                 )
+            }
+
+            if (report != null && report?.rootSummary != "Root status: not checked") {
+                GlassCard {
+                    SectionLabel("ROOT DIAGNOSTIC DETAILS")
+                    report?.notes.orEmpty().forEach { detail ->
+                        Text(detail, color = Color(0xFFAAB8D0), fontSize = 11.sp)
+                    }
+                }
             }
 
             Text(

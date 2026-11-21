@@ -1,24 +1,15 @@
 package dev.ioslook.transformation.diagnostics
 
+import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.app.role.RoleManager
 import android.provider.Settings
 import java.util.concurrent.TimeUnit
 
-enum class DiagnosticState {
-    READY,
-    NEEDS_USER_ACTION,
-    NOT_TARGET,
-    UNTESTED
-}
+enum class DiagnosticState { READY, NEEDS_USER_ACTION, NOT_TARGET, UNTESTED }
 
-data class DiagnosticItem(
-    val id: String,
-    val title: String,
-    val state: DiagnosticState,
-    val detail: String
-)
+data class DiagnosticItem(val id: String, val title: String, val state: DiagnosticState, val detail: String)
 
 data class DeviceReport(
     val deviceName: String,
@@ -34,64 +25,56 @@ object DeviceDiagnostics {
     fun readBasic(context: Context): DeviceReport {
         val targetMatch = Build.MANUFACTURER.equals("samsung", ignoreCase = true) &&
             Build.MODEL.equals("SM-A266B", ignoreCase = true)
-
         val overlayAllowed = Settings.canDrawOverlays(context)
         val writeSettingsAllowed = Settings.System.canWrite(context)
         val isHomeRoleHeld = context.getSystemService(RoleManager::class.java)
             ?.isRoleHeld(RoleManager.ROLE_HOME) == true
+        val listenerComponent = ComponentName(
+            context,
+            "dev.ioslook.transformation.notifications.NotificationAccessService"
+        )
+        val enabledListeners = Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners"
+        ).orEmpty().split(':')
+        val notificationAccess = enabledListeners.any {
+            ComponentName.unflattenFromString(it) == listenerComponent
+        }
 
         val capabilities = listOf(
             DiagnosticItem(
-                id = "target_device",
-                title = "Galaxy A26 target match",
-                state = if (targetMatch) DiagnosticState.READY else DiagnosticState.NOT_TARGET,
-                detail = if (targetMatch) {
-                    "Samsung SM-A266B detected. Firmware-specific features still require validation."
-                } else {
-                    "Expected Samsung SM-A266B; detected ${Build.MANUFACTURER} ${Build.MODEL}."
-                }
+                "target_device", "Galaxy A26 target match",
+                if (targetMatch) DiagnosticState.READY else DiagnosticState.NOT_TARGET,
+                if (targetMatch) "Samsung SM-A266B detected. Firmware-specific features still require validation."
+                else "Expected Samsung SM-A266B; detected ${Build.MANUFACTURER} ${Build.MODEL}."
             ),
             DiagnosticItem(
-                id = "overlay_permission",
-                title = "Display over other apps",
-                state = if (overlayAllowed) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
-                detail = if (overlayAllowed) {
-                    "The app currently has overlay permission."
-                } else {
-                    "Not granted. No permission request was opened; only overlay-based features would need it."
-                }
+                "overlay_permission", "Display over other apps",
+                if (overlayAllowed) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
+                if (overlayAllowed) "The app currently has overlay permission."
+                else "Not granted. No permission request was opened; only overlay-based features would need it."
             ),
             DiagnosticItem(
-                id = "write_settings",
-                title = "Modify system settings",
-                state = if (writeSettingsAllowed) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
-                detail = if (writeSettingsAllowed) {
-                    "The app currently has permission to modify supported system settings."
-                } else {
-                    "Not granted. This permission is optional and is not requested automatically."
-                }
+                "write_settings", "Modify system settings",
+                if (writeSettingsAllowed) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
+                if (writeSettingsAllowed) "The app currently has permission to modify supported system settings."
+                else "Not granted. This permission is optional and is not requested automatically."
             ),
             DiagnosticItem(
-                id = "home_role",
-                title = "Default launcher role",
-                state = if (isHomeRoleHeld) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
-                detail = if (isHomeRoleHeld) {
-                    "iOS-inspired home launcher is available and currently selected."
-                } else {
-                    "The launcher is implemented. Select it as the default HOME app to use it."
-                }
+                "home_role", "Default launcher role",
+                if (isHomeRoleHeld) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
+                if (isHomeRoleHeld) "iOS-inspired home launcher is available and currently selected."
+                else "The launcher is implemented. Select it as the default HOME app to use it."
             ),
             DiagnosticItem(
-                id = "systemui",
-                title = "One UI / SystemUI integration",
-                state = DiagnosticState.UNTESTED,
-                detail = "Not probed. Model detection does not prove that SystemUI resources can be changed."
+                "systemui", "One UI / SystemUI integration", DiagnosticState.UNTESTED,
+                "Not probed. Model detection does not prove that SystemUI resources can be changed."
             ),
             DiagnosticItem(
-                id = "notification_listener",
-                title = "Notification access",
-                state = DiagnosticState.UNTESTED,
-                detail = "No notification-listener service is registered in this build."
+                "notification_listener", "Notification access",
+                if (notificationAccess) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
+                if (notificationAccess) "Notification listener is enabled. This build does not collect or store notification content."
+                else "Listener is registered, but access is not granted. Enable it manually to permit future notification features."
             )
         )
 
@@ -106,47 +89,80 @@ object DeviceDiagnostics {
         )
     }
 
-    /**
-     * Explicit, read-only su probe. It runs only after the user presses the
-     * full diagnostics button; a root provider may show its own prompt.
-     */
+    /** Fixed, read-only probes only; no writes to files, settings or partitions. */
     fun runFullCheck(context: Context): DeviceReport {
         val base = readBasic(context)
-        val root = probeSu()
-        val notes = buildList {
-            add("Manufacturer: ${Build.MANUFACTURER}")
-            add("Model: ${Build.MODEL}")
-            add("Device codename: ${Build.DEVICE}")
-            add("Build display: ${Build.DISPLAY}")
-            add("SDK: ${Build.VERSION.SDK_INT}")
-            add("Security patch: ${Build.VERSION.SECURITY_PATCH}")
-            add("Fingerprint: ${Build.FINGERPRINT}")
-            add("Root probe: $root")
-            add("No files, settings, overlays or partitions were modified.")
-            add("A uid=0 result does not prove module, mount, persistence or SystemUI capabilities.")
+        val output = probeSu()
+        val isRoot = output.contains("uid=0")
+        val ksud = output.lineSequence().firstOrNull { it.startsWith("KSUD=") }?.substringAfter("=") ?: "not reported"
+        val magisk = output.lineSequence().firstOrNull { it.startsWith("MAGISK=") }?.substringAfter("=") ?: "not reported"
+        val provider = when {
+            ksud != "not found" && ksud.isNotBlank() -> "KernelSU command-line tool found"
+            magisk != "not found" && magisk.isNotBlank() -> "Magisk command-line tool found"
+            else -> "Root provider CLI not identified"
         }
-        return base.copy(rootSummary = root, notes = notes)
+        val rootSummary = when {
+            output.startsWith("TIMEOUT:") -> "Root status: su probe timed out"
+            output.startsWith("ERROR:") -> "Root status: ${output.removePrefix("ERROR:").take(140)}"
+            isRoot -> "Root status: su returned uid=0"
+            else -> "Root status: uid=0 not confirmed"
+        }
+        fun value(key: String): String =
+            output.lineSequence().firstOrNull { it.startsWith("$key=") }
+                ?.substringAfter("=")?.ifBlank { "not reported" } ?: "not reported"
+
+        val notes = listOf(
+            "Root provider: $provider",
+            "su identity: ${value("ID")}",
+            "KernelSU CLI: $ksud",
+            "Magisk CLI: $magisk",
+            "SELinux: ${value("SELINUX")}",
+            "Verified boot state: ${value("VERIFIED_BOOT")}",
+            "Bootloader lock property: ${value("BOOT_LOCKED")}",
+            "su mount namespace: ${value("MOUNT_NS")}",
+            "PID 1 mount namespace: ${value("INIT_NS")}",
+            "Systemless module directory: ${value("MODULES")}",
+            "These observations do not prove SystemUI overlay or persistent-module support.",
+            "No files, settings, overlays, boot images or partitions were modified."
+        )
+        val rootItem = DiagnosticItem(
+            "root_access", "Root shell and provider",
+            if (isRoot) DiagnosticState.READY else DiagnosticState.NEEDS_USER_ACTION,
+            if (isRoot) "su returned uid=0. Provider, mount and boot-state details are listed below."
+            else "A usable uid=0 shell was not confirmed."
+        )
+        return base.copy(
+            rootSummary = rootSummary,
+            capabilities = base.capabilities + rootItem,
+            notes = notes
+        )
     }
 
     private fun probeSu(): String {
+        val command = """
+            printf 'ID='; id
+            printf 'KSUD='; command -v ksud 2>/dev/null || printf 'not found'; printf '\n'
+            printf 'MAGISK='; command -v magisk 2>/dev/null || printf 'not found'; printf '\n'
+            printf 'SELINUX='; getenforce 2>/dev/null || printf 'unknown'; printf '\n'
+            printf 'VERIFIED_BOOT='; getprop ro.boot.verifiedbootstate 2>/dev/null; printf '\n'
+            printf 'BOOT_LOCKED='; getprop ro.boot.flash.locked 2>/dev/null; printf '\n'
+            printf 'MOUNT_NS='; readlink /proc/self/ns/mnt 2>/dev/null || printf 'unavailable'; printf '\n'
+            printf 'INIT_NS='; readlink /proc/1/ns/mnt 2>/dev/null || printf 'unavailable'; printf '\n'
+            printf 'MODULES='
+            if [ -d /data/adb/modules ]; then ls -1 /data/adb/modules 2>/dev/null | head -20 | tr '\n' ','; else printf 'directory absent'; fi
+            printf '\n'
+        """.trimIndent()
         return try {
-            val process = ProcessBuilder("su", "-c", "id")
-                .redirectErrorStream(true)
-                .start()
-            val completed = process.waitFor(3, TimeUnit.SECONDS)
-            if (!completed) {
+            val process = ProcessBuilder("su", "-c", command).redirectErrorStream(true).start()
+            if (!process.waitFor(8, TimeUnit.SECONDS)) {
                 process.destroyForcibly()
-                "Root status: probe timed out"
+                "TIMEOUT: root diagnostic command exceeded 8 seconds"
             } else {
-                val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
-                if (process.exitValue() == 0 && output.contains("uid=0")) {
-                    "Root status: su returned uid=0 (provider confirmed)"
-                } else {
-                    "Root status: unavailable or authorization denied"
-                }
+                val result = process.inputStream.bufferedReader().use { it.readText() }.take(4000)
+                if (process.exitValue() == 0) result else result + "\nEXIT=" + process.exitValue()
             }
-        } catch (_: Exception) {
-            "Root status: no usable su provider detected"
+        } catch (error: Exception) {
+            "ERROR: ${error.javaClass.simpleName}"
         }
     }
 }

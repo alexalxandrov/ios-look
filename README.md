@@ -1,52 +1,38 @@
 # iOS Transformation
 
-A modular Android customization toolkit for Samsung Galaxy devices, starting with the Galaxy A26 5G (SM-A266B), Android 17 / One UI 9.
+An independent Android customization project for Samsung Galaxy A26 5G (SM-A266B), with an iOS 26-inspired Dark / Liquid Glass visual target. It is not Apple software and does not replace Android with iOS.
 
-**Visual target:** iOS 26-inspired Dark appearance with a strong Liquid Glass aesthetic. This is an independent Android implementation, not Apple software and not an iOS port.
+## Current build: 0.3.0 preview
 
-## Project status
+- A selectable HOME launcher with real installed-app icons, a searchable app grid, clock/date header and an adaptive Samsung/Google dock.
+- Read-only device and permission diagnostics for the SM-A266B.
+- An explicit root probe for su identity, KernelSU/Magisk CLI presence, SELinux, verified-boot properties, mount namespace identifiers and the /data/adb/modules directory.
+- A registered notification-listener service. It intentionally does not read, store or forward notification contents; the user must separately grant access in Android Settings.
+- A transaction coordinator and bounded operation journal. No system customization operation is registered yet.
 
-Early foundation. The starter app builds successfully in GitHub Actions. The current build is diagnostic-only: it does not apply themes or modify device settings.
-
-## Design principles
-
-- **Maximum resemblance, honest capability reporting:** every feature is classified as supported, partial, unavailable, or not yet tested on the exact firmware.
-- **Two execution modes:** standard (no root) and optional elevated mode through a user-authorized root provider.
-- **Reversible by design:** snapshot before mutation, record each operation, verify after applying, and provide component-level plus full rollback.
-- **No boot-chain changes:** the app will not unlock the bootloader, flash partitions, patch boot images, or write to firmware partitions.
-- **No fake progress:** UI progress reflects real completed operations and verification results.
-- **Device-specific adapters:** Samsung One UI behavior is isolated from generic Android functionality.
-
-## Planned capabilities
-
-1. Device and capability diagnostics.
-2. iOS-inspired launcher, icon pack, wallpaper and widgets.
-3. Dark palette, typography and compatible theme integrations.
-4. Media player and notification presentation.
-5. Lock-screen companion/customization where Android permits.
-6. Quick Settings / notification shade integration where supported.
-7. Optional KernelSU/root adapter for explicitly supported, systemless operations.
-8. Backup, operation journal, health checks and rollback.
+The launcher is an early functional preview. It does not yet provide editable icon placement, folders, widgets, a replacement lock screen, a replacement notification shade or SystemUI modification.
 
 ## Build and install
 
-GitHub Actions builds a debug APK on every push and pull request to `main`. Successful runs publish an artifact named **ios-transformation-debug** for 14 days.
+Every push and pull request to main runs unit tests and assembles a debug APK. Successful runs publish ios-transformation-debug for 14 days.
 
 1. Open [GitHub Actions](https://github.com/alexalxandrov/ios-look/actions).
-2. Select the successful Android CI run.
-3. Download `ios-transformation-debug` and extract `app-debug.apk`.
-4. Install with `adb install -r app-debug.apk`, or transfer the APK to the phone and open it.
+2. Open the latest successful Android CI run.
+3. Download ios-transformation-debug and extract app-debug.apk.
+4. Install with adb install -r app-debug.apk, or transfer the APK to the phone.
 
-See [docs/DEVICE-TEST.md](docs/DEVICE-TEST.md) for the Galaxy A26 first-run checklist and exact baseline commands.
+Open iOS Transformation and press Set as default launcher to select the HOME app. Android displays its own confirmation. The notification-listener permission is separate and optional.
 
 ## Device compatibility
 
-The initial project targets a conservative Android SDK baseline. Android 17 / One UI 9 compatibility must be tested on the actual A266B build before enabling any system-level operation.
+The project uses compileSdk 36 and is being tested on the Android 17 / API 37 Galaxy A26 firmware A266BXXUCDZJ6. A lower compileSdk does not prevent an app from running on a newer Android release, but it does mean Android 17-only APIs are not used. Device-specific features remain disabled until tested on the exact firmware.
 
 ## Safety
 
-The initial app is diagnostic-only. Root availability does not imply that a particular operation is safe or supported. KernelSU officially requires an unlocked bootloader; any reported temporary privilege mechanism must be independently verified and treated as experimental. See [docs/SAFETY.md](docs/SAFETY.md).
+All current diagnostics are read-only. Root checks run only after the user presses the full diagnostics button. uid=0 does not establish that a root manager, mount operations, systemless modules or SystemUI overlays are supported. No boot images, firmware partitions, SELinux settings or verified-boot state are modified.
+
+KernelSU's official documentation requires an unlocked bootloader; a reported temporary root path must not be assumed to be KernelSU. See docs/SAFETY.md.
 
 ## License
 
-TBD. No Apple proprietary assets, icons, fonts, sounds, or source code are included.
+TBD. No Apple proprietary assets, icons, fonts, sounds or source code are included.
