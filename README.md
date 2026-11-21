@@ -30,6 +30,9 @@ Early foundation. The repository is being built in small, testable layers. No de
 
 ## Build
 
+The repository includes a GitHub Actions debug-build workflow. Its result is the first compile gate; device behavior still requires on-device testing.
+
+
 Open this repository in Android Studio or use a local Android SDK + Gradle installation.
 
 Initial project targets a conservative Android SDK baseline; device-specific Android 17 / One UI 9 compatibility must be tested on the actual A266B build before enabling any system-level operation.
