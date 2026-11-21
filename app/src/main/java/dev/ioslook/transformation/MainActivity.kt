@@ -2,7 +2,10 @@ package dev.ioslook.transformation
 
 import android.content.Context
 import android.os.Bundle
+import android.app.role.RoleManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -74,6 +77,13 @@ private fun TransformationHome(context: Context) {
     val scope = rememberCoroutineScope()
     var report by remember { mutableStateOf<DeviceReport?>(null) }
     var checking by remember { mutableStateOf(false) }
+    val homeRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        scope.launch {
+            report = withContext(Dispatchers.IO) { DeviceDiagnostics.readBasic(context) }
+        }
+    }
 
     LaunchedEffect(context) {
         report = withContext(Dispatchers.IO) { DeviceDiagnostics.readBasic(context) }
@@ -160,6 +170,30 @@ private fun TransformationHome(context: Context) {
                     color = Color(0xFFB5C0D3),
                     fontSize = 13.sp
                 )
+            }
+
+            val homeRoleReady = report?.capabilities
+                ?.firstOrNull { it.id == "home_role" }
+                ?.state == DiagnosticState.READY
+
+            if (!homeRoleReady) {
+                Button(
+                    onClick = {
+                        val roleManager = context.getSystemService(RoleManager::class.java)
+                        if (roleManager?.isRoleAvailable(RoleManager.ROLE_HOME) == true) {
+                            homeRoleLauncher.launch(
+                                roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF9DB7E8),
+                        contentColor = Color(0xFF101827)
+                    )
+                ) {
+                    Text("Set as default launcher")
+                }
             }
 
             GlassCard {
