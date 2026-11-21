@@ -2,40 +2,40 @@
 
 ## Product model
 
-The project is a coordinator for independent customization capabilities. It is not a replacement Android framework and does not attempt to boot iOS.
+The project coordinates independent customization capabilities. It is not a replacement Android framework and does not attempt to boot iOS.
 
-### Layers
+## Layers
 
-1. **Presentation** — Compose UI, progress, diagnostics, per-feature status and rollback controls.
-2. **Orchestrator** — plans operations, checks prerequisites, orders dependencies, records outcomes.
-3. **Capability registry** — reports supported / partial / unavailable / untested on this exact firmware.
+1. **Presentation** — Compose UI, diagnostics and per-feature status.
+2. **Orchestrator** — serializes operations and enforces preflight, backup, apply, verify and rollback.
+3. **Capability registry** — classifies features as supported / partial / unavailable / untested on the exact firmware.
 4. **Adapters**
    - Android public APIs (wallpaper, launcher role, notification listener, media session access).
    - Samsung integrations (Good Lock / Theme Park / supported theme mechanisms).
    - Optional root provider (explicit user authorization).
    - Device-specific One UI adapter, gated by verified firmware fingerprints.
-5. **Persistence** — Room database for operation journal, profile state and backup manifests.
-6. **Recovery** — idempotent undo actions, restore points and post-rollback verification.
+5. **Persistence** — bounded app-private operation journal. The current implementation uses synchronous SharedPreferences commits on an I/O dispatcher; Room may replace it as profiles and backup manifests grow.
+6. **Recovery** — operation-specific undo actions and post-rollback verification.
 
-## Core interfaces (planned)
+## Core interfaces
 
-- `CapabilityProbe`: inspect prerequisites without mutation.
-- `CustomizationOperation`: declare id, risk, prerequisites, apply, verify and rollback.
-- `ExecutionPlan`: immutable ordered list of operations and dependency graph.
-- `OperationJournal`: durable state transitions (planned, running, applied, verified, failed, rolled_back).
-- `BackupStore`: store only data the app is legally and technically allowed to restore.
-- `RootExecutor`: narrowly scoped command execution, no arbitrary shell exposed to UI.
+- `CustomizationOperation`: declares id, risk, prerequisite checks, backup, apply, verify and rollback.
+- `CustomizationCoordinator`: serializes operations, requires a verified backup before applying, verifies the result and invokes rollback on failure.
+- `OperationJournal`: persists state transitions (planned, checking, backing_up, applying, verifying, applied, failed, rolling_back, rolled_back).
+- `PreferencesOperationJournal`: retains the latest 250 journal events locally.
+- `BackupStore`: future abstraction for structured backup manifests and data the app is legally and technically allowed to restore.
+- `RootExecutor`: future narrowly scoped command execution; no arbitrary shell is exposed to the UI.
 
 ## Safety invariants
 
 - Every mutating operation must declare a rollback strategy before it can be registered.
-- Backup is completed and verified before mutation.
+- Backup must be completed and verified before mutation.
 - No blind overwrite of user settings or theme state.
 - Never write boot, vendor_boot, vbmeta, super or raw block devices.
 - Never silently install modules, grant permissions, or execute root commands.
 - Root operations are opt-in, individually explained, and allowlisted.
-- A failed verification triggers rollback of that operation and stops dependent operations.
-- Reboot-required operations must be clearly identified and cannot be reported as applied before reboot verification.
+- Failed verification triggers rollback of that operation and stops dependent operations.
+- Reboot-required operations cannot be reported as applied before post-reboot verification.
 - UI progress is derived from journal events, never simulated.
 
 ## Capability status
@@ -47,8 +47,8 @@ The project is a coordinator for independent customization capabilities. It is n
 
 ## Implementation phases
 
-1. Device diagnostics and root-provider probe (current starter).
-2. Operation model, journal and backup metadata.
+1. Device diagnostics and explicit root-provider probe.
+2. Transaction coordinator and durable operation journal (implemented; no mutating operation is registered yet).
 3. Launcher and visual asset pack.
 4. Theme integration and user-guided Samsung configuration.
 5. Notification/media companion components.
