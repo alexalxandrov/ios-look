@@ -6,7 +6,7 @@ A modular Android customization toolkit for Samsung Galaxy devices, starting wit
 
 ## Project status
 
-Early foundation. The repository is being built in small, testable layers. No device modifications are performed by the current starter app.
+Early foundation. The starter app builds successfully in GitHub Actions. The current build is diagnostic-only: it does not apply themes or modify device settings.
 
 ## Design principles
 
@@ -28,14 +28,20 @@ Early foundation. The repository is being built in small, testable layers. No de
 7. Optional KernelSU/root adapter for explicitly supported, systemless operations.
 8. Backup, operation journal, health checks and rollback.
 
-## Build
+## Build and install
 
-The repository includes a GitHub Actions debug-build workflow. Its result is the first compile gate; device behavior still requires on-device testing.
+GitHub Actions builds a debug APK on every push and pull request to `main`. Successful runs publish an artifact named **ios-transformation-debug** for 14 days.
 
+1. Open [GitHub Actions](https://github.com/alexalxandrov/ios-look/actions).
+2. Select the successful Android CI run.
+3. Download `ios-transformation-debug` and extract `app-debug.apk`.
+4. Install with `adb install -r app-debug.apk`, or transfer the APK to the phone and open it.
 
-Open this repository in Android Studio or use a local Android SDK + Gradle installation.
+See [docs/DEVICE-TEST.md](docs/DEVICE-TEST.md) for the Galaxy A26 first-run checklist and exact baseline commands.
 
-Initial project targets a conservative Android SDK baseline; device-specific Android 17 / One UI 9 compatibility must be tested on the actual A266B build before enabling any system-level operation.
+## Device compatibility
+
+The initial project targets a conservative Android SDK baseline. Android 17 / One UI 9 compatibility must be tested on the actual A266B build before enabling any system-level operation.
 
 ## Safety
 
